@@ -444,6 +444,12 @@ public class DriverSpy implements Driver
       getBooleanOption(props, "log4jdbc.suppress.generated.keys.exception",
       false);
 
+      QueryStatsManager qsMgr = QueryStatsManager.getInstance();
+
+      qsMgr.setLogging( getBooleanOption( props, "log4jdbc.isLogging", true ) );
+      qsMgr.setGettingEstimatedSubtreeCost( getBooleanOption( props, "log4jdbc.gettingESC", false ) );
+      qsMgr.setClearingCache( getBooleanOption( props, "log4jdbc.clearingCache", false ) );
+
     // The Set of drivers that the log4jdbc driver will preload at instantiation
     // time.  The driver can spy on any driver type, it's just a little bit
     // easier to configure log4jdbc if it's one of these types!
