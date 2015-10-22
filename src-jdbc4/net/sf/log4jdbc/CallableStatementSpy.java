@@ -1580,6 +1580,16 @@ public class CallableStatementSpy extends PreparedStatementSpy implements Callab
     reportReturn(methodCall);
   }
 
+  @Override
+  public <T> T getObject(int parameterIndex, Class<T> type) throws SQLException {
+    return null;
+  }
+
+  @Override
+  public <T> T getObject(String parameterName, Class<T> type) throws SQLException {
+    return null;
+  }
+
   public void setURL(String parameterName, URL val) throws SQLException
   {
     String methodCall = "setURL(" + parameterName + ", " + val + ")";
@@ -1704,4 +1714,13 @@ public class CallableStatementSpy extends PreparedStatementSpy implements Callab
     }
   }
 
+  @Override
+  public void closeOnCompletion() throws SQLException {
+
+  }
+
+  @Override
+  public boolean isCloseOnCompletion() throws SQLException {
+    return false;
+  }
 }
