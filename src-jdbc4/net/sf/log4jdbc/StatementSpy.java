@@ -292,8 +292,24 @@ public class StatementSpy implements Statement, Spy
   {
     // redirect to one more method call ONLY so that stack trace search is consistent
     // with the reportReturn calls
-    _reportSqlTiming(execTime, (DriverSpy.StatementUsageWarn?StatementSqlWarning:"") +
-      sql, methodCall);
+
+    if (sql.contains("DBCC")) {
+      // Not worring about cache clearing
+      return;
+    }
+
+    QueryStatsManager mgr = QueryStatsManager.getInstance();
+    mgr.queryExecuted(sql, (double) execTime);
+    if (mgr.isGettingESC() && !mgr.doesEstimatedSubtreeCostExist(sql)) {
+      mgr.putEstimatedSubtreeCost(sql, getCachedQueryPlanCost(sql));
+    }
+    if (mgr.isClearingCache()) {
+      clearDatabaseCache();
+    }
+    if (mgr.isLogging()) {
+      _reportSqlTiming(execTime, (DriverSpy.StatementUsageWarn ? StatementSqlWarning : "") +
+              sql, methodCall);
+    }
   }
 
   /**
@@ -307,7 +323,24 @@ public class StatementSpy implements Statement, Spy
   {
     // redirect to one more method call ONLY so that stack trace search is consistent
     // with the reportReturn calls
-    _reportSqlTiming(execTime, sql, methodCall);
+    if (sql.contains("DBCC")) {
+      // Not worrying about cache clearing
+      return;
+    }
+
+    QueryStatsManager mgr = QueryStatsManager.getInstance();
+    mgr.queryExecuted(sql, (double) execTime);
+    if (mgr.isGettingESC() && !mgr.doesEstimatedSubtreeCostExist(sql)) {
+      mgr.putEstimatedSubtreeCost(sql, getCachedQueryPlanCost(sql));
+    }
+
+    if (mgr.isClearingCache()) {
+      clearDatabaseCache();
+    }
+
+    if (mgr.isLogging()) {
+      _reportSqlTiming(execTime, sql, methodCall);
+    }
   }
 
   /**
@@ -1023,6 +1056,86 @@ public class StatementSpy implements Statement, Spy
     {
       reportException(methodCall,s);
       throw s;
+    }
+  }
+
+  /*
+ * Used to get Estimated Subtree Cost from the query plans cached in the Database
+ */
+  private double getCachedQueryPlanCost( String sql ) {
+    String queryString = "";
+    String queryName = extractQueryName( sql );
+    if ( queryName.isEmpty() ) {
+      // The query does not have a name, the test will fail if the query was tested
+      return -4;
+    }
+    try {
+      ResultSet rs = searchForCachedQueryPlan( queryName );
+      if ( rs.next() ) {
+        queryString = rs.getString( 1 );
+      } else {
+        // no cached plan exists
+        return -3;
+      }
+
+    } catch ( SQLException e ) {
+      log.debug( "Error obtaining query plan" );
+      return -2;
+    } finally {
+    }
+    // Look for appropriate String
+    int estimatedLocation = queryString.indexOf( "EstimatedTotalSubtreeCost", 0 );
+    if ( estimatedLocation > -1 ) {
+      // The string is found, try to parse out the value
+      estimatedLocation += "EstimatedTotalSubtreeCost".length() + 2;
+
+      try {
+        String estimatedSubTree = queryString.substring( estimatedLocation, queryString.indexOf( "\"", estimatedLocation ) );
+        return Double.parseDouble( estimatedSubTree );
+      } catch ( NumberFormatException e ) {
+        log.debug( "Error parsing out estimated sub tree cost from: " + queryString );
+        return -2;
+      }
+    } else {
+      // String not found, assume the query is very simple and has not estimated cost, returns -1
+      return -1;
+    }
+  }
+
+  private ResultSet searchForCachedQueryPlan( String queryName ) throws SQLException {
+    StringBuilder cacheQuery = new StringBuilder();
+    cacheQuery.append( "SELECT query_plan " );
+    cacheQuery.append( " FROM sys.dm_exec_cached_plans " );
+    cacheQuery.append( " CROSS apply sys.Dm_exec_sql_text(plan_handle) " );
+    cacheQuery.append( " CROSS apply sys.Dm_exec_query_plan(plan_handle) " );
+    cacheQuery.append( " WHERE dm_exec_sql_text.dbid = Db_id() " );
+    // Look in the text column find SQL query starts with the query name
+    cacheQuery.append( " AND text Like '" );
+    cacheQuery.append( queryName );
+    cacheQuery.append( "%'" );
+    // For PreparedStatemen, and the format of text will be "(variables)query"
+    cacheQuery.append( " OR text LIKE '(%)" );
+    cacheQuery.append( queryName );
+    cacheQuery.append( "%'" );
+    return connectionSpy.getRealConnection().createStatement().executeQuery( cacheQuery.toString() );
+  }
+
+  private String extractQueryName( String sqlQuery ) {
+    if ( !sqlQuery.contains( "#QUERYNAME=" ) ) {
+      return "";
+    }
+
+    int endIndex = sqlQuery.indexOf( "*/" );
+
+    return sqlQuery.substring( 0, endIndex + 2 );
+  }
+
+  private void clearDatabaseCache() {
+    try {
+      connectionSpy.getRealConnection().createStatement().execute( "DBCC DROPCLEANBUFFERS" );
+      connectionSpy.getRealConnection().createStatement().execute( "DBCC FREEPROCCACHE" );
+    } catch ( SQLException e ) {
+      log.debug( "Error clearing database cache" );
     }
   }
 
