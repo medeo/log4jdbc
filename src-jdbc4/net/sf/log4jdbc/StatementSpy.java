@@ -292,21 +292,9 @@ public class StatementSpy implements Statement, Spy
   {
     // redirect to one more method call ONLY so that stack trace search is consistent
     // with the reportReturn calls
+    collectQueryStats(sql, execTime);
 
-    if (sql.contains("DBCC")) {
-      // Not worring about cache clearing
-      return;
-    }
-
-    QueryStatsManager mgr = QueryStatsManager.getInstance();
-    mgr.queryExecuted(sql, (double) execTime);
-    if (mgr.isGettingESC() && !mgr.doesEstimatedSubtreeCostExist(sql)) {
-      mgr.putEstimatedSubtreeCost(sql, getCachedQueryPlanCost(sql));
-    }
-    if (mgr.isClearingCache()) {
-      clearDatabaseCache();
-    }
-    if (mgr.isLogging()) {
+    if (QueryStatsManager.getInstance().isLogging()) {
       _reportSqlTiming(execTime, (DriverSpy.StatementUsageWarn ? StatementSqlWarning : "") +
               sql, methodCall);
     }
@@ -323,22 +311,9 @@ public class StatementSpy implements Statement, Spy
   {
     // redirect to one more method call ONLY so that stack trace search is consistent
     // with the reportReturn calls
-    if (sql.contains("DBCC")) {
-      // Not worrying about cache clearing
-      return;
-    }
+    collectQueryStats(sql, execTime);
 
-    QueryStatsManager mgr = QueryStatsManager.getInstance();
-    mgr.queryExecuted(sql, (double) execTime);
-    if (mgr.isGettingESC() && !mgr.doesEstimatedSubtreeCostExist(sql)) {
-      mgr.putEstimatedSubtreeCost(sql, getCachedQueryPlanCost(sql));
-    }
-
-    if (mgr.isClearingCache()) {
-      clearDatabaseCache();
-    }
-
-    if (mgr.isLogging()) {
+    if (QueryStatsManager.getInstance().isLogging()) {
       _reportSqlTiming(execTime, sql, methodCall);
     }
   }
@@ -1056,6 +1031,23 @@ public class StatementSpy implements Statement, Spy
     {
       reportException(methodCall,s);
       throw s;
+    }
+  }
+
+  private void collectQueryStats(String sql, double execTime)
+  {
+    if (sql.contains("DBCC")) {
+      // Not worring about cache clearing
+      return;
+    }
+
+    QueryStatsManager mgr = QueryStatsManager.getInstance();
+    mgr.queryExecuted(sql, execTime);
+    if (mgr.trackingQueryEstimatedSubtreeCost() && !mgr.doesEstimatedSubtreeCostExist(sql)) {
+      mgr.putEstimatedSubtreeCost(sql, getCachedQueryPlanCost(sql));
+    }
+    if (mgr.isClearingCache()) {
+      clearDatabaseCache();
     }
   }
 
