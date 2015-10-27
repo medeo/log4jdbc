@@ -17,12 +17,7 @@ package net.sf.log4jdbc;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.Driver;
-import java.sql.DriverManager;
-import java.sql.DriverPropertyInfo;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -30,6 +25,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.logging.Logger;
 
 /**
  * A JDBC driver which is a facade that delegates to one or more real underlying
@@ -448,6 +444,12 @@ public class DriverSpy implements Driver
       getBooleanOption(props, "log4jdbc.suppress.generated.keys.exception",
       false);
 
+      QueryStatsManager qsMgr = QueryStatsManager.getInstance();
+
+      qsMgr.setLogging( getBooleanOption( props, "log4jdbc.isLogging", true ) );
+      qsMgr.setGettingEstimatedSubtreeCost( getBooleanOption( props, "log4jdbc.gettingESC", false ) );
+      qsMgr.setClearingCache( getBooleanOption( props, "log4jdbc.clearingCache", false ) );
+
     // The Set of drivers that the log4jdbc driver will preload at instantiation
     // time.  The driver can spy on any driver type, it's just a little bit
     // easier to configure log4jdbc if it's one of these types!
@@ -635,6 +637,11 @@ public class DriverSpy implements Driver
   {
     return lastUnderlyingDriverRequested != null &&
       lastUnderlyingDriverRequested.jdbcCompliant();
+  }
+
+  @Override
+  public Logger getParentLogger() throws SQLFeatureNotSupportedException {
+    return null;
   }
 
   /**

@@ -1149,4 +1149,13 @@ public class PreparedStatementSpy extends StatementSpy implements PreparedStatem
     }
   }
 
+  @Override
+  public void closeOnCompletion() throws SQLException {
+
+  }
+
+  @Override
+  public boolean isCloseOnCompletion() throws SQLException {
+    return false;
+  }
 }
